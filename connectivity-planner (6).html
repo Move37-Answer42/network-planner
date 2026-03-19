@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Expereo · Global Connectivity Planner</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  /* Expereo brand palette */
+  --orange:#FF6600;--orange-light:#FF8533;--orange-dim:rgba(255,102,0,0.10);
+  --navy:#0A1628;--navy2:#0F2040;
+  /* Light UI surfaces */
+  --bg:#F0F4F8;--surface:#FFFFFF;--surface2:#F7F9FC;
+  --border:#DDE3EC;--border2:#E8EDF4;
+  /* Text */
+  --text:#0A1628;--text2:#4A5C7A;--muted:#8899BB;
+  /* Status colors */
+  --green:#00B37A;--green-dim:rgba(0,179,122,0.1);
+  --red:#E8344A;--amber:#F59E0B;
+  --accent:var(--orange);--adim:var(--orange-dim);--accent2:#CC5200;
+  /* Fonts */
+  --body:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;--hud:'Inter',sans-serif;
+  --pw:480px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--body);display:flex;flex-direction:column;height:100vh;}
+/* Subtle world-grid texture */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(10,22,40,0.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(10,22,40,0.04) 1px,transparent 1px);
+  background-size:60px 60px;}
+.scanline{display:none;}
+@keyframes fadein{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+
+/* ── HEADER ── */
+header{position:relative;z-index:20;height:58px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:var(--navy);border-bottom:3px solid var(--orange);flex-shrink:0;box-shadow:0 2px 16px rgba(10,22,40,0.18);}
+/* Expereo wordmark — SVG inline */
+.expereo-logo{display:flex;align-items:center;gap:0;}
+.expereo-wordmark{font-family:var(--body);font-size:22px;font-weight:900;letter-spacing:-0.5px;color:#fff;}
+.expereo-wordmark span{color:var(--orange);}
+.logo-divider{width:1px;height:28px;background:rgba(255,255,255,0.15);margin:0 18px;}
+.logo-sub{font-size:10px;font-weight:600;letter-spacing:2px;color:rgba(255,255,255,0.45);text-transform:uppercase;}
+.hdr-mid{position:absolute;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:rgba(255,255,255,0.5);}
+.hdr-right{display:flex;gap:8px;align-items:center;}
+
+/* ── BUTTONS ── */
+.btn{font-family:var(--body);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 16px;border-radius:5px;cursor:pointer;border:none;transition:all 0.2s;white-space:nowrap;}
+.btn-ghost{background:transparent;border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.6);}
+.btn-ghost:hover{border-color:rgba(255,255,255,0.6);color:#fff;}
+.btn-ghost-dark{background:transparent;border:1px solid var(--border);color:var(--text2);}
+.btn-ghost-dark:hover{border-color:var(--orange);color:var(--orange);}
+.btn-cta{background:var(--orange);color:#fff;font-weight:800;box-shadow:0 2px 12px rgba(255,102,0,0.35);}
+.btn-cta:hover{background:var(--orange-light);box-shadow:0 4px 20px rgba(255,102,0,0.45);transform:translateY(-1px);}
+.btn-cta:disabled{opacity:0.35;cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-yes{background:var(--green);color:#fff;font-weight:800;box-shadow:0 2px 10px rgba(0,179,122,0.3);}
+.btn-yes:hover{filter:brightness(1.1);transform:translateY(-1px);}
+.btn-no{background:var(--orange);color:#fff;font-weight:800;box-shadow:0 2px 10px rgba(255,102,0,0.3);}
+.btn-no:hover{background:var(--orange-light);transform:translateY(-1px);}
+.btn-sm{font-family:var(--body);font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:4px 10px;border-radius:3px;cursor:pointer;border:1px solid var(--border);background:none;color:var(--muted);transition:all 0.15s;}
+.btn-sm:hover{border-color:var(--orange);color:var(--orange);}
+.btn-sm.danger:hover{border-color:var(--red);color:var(--red);}
+
+/* ── MAIN LAYOUT ── */
+main{flex:1;display:flex;overflow:hidden;position:relative;z-index:1;min-height:0;}
+#map-wrap{flex:1;position:relative;overflow:hidden;}
+#map-wrap svg{display:block;width:100%;height:100%;}
+#instruction{position:absolute;bottom:50px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.95);border:1px solid var(--border);border-radius:100px;padding:9px 22px;font-size:11px;font-weight:600;letter-spacing:1px;color:var(--text2);box-shadow:0 4px 16px rgba(10,22,40,0.1);white-space:nowrap;z-index:5;transition:opacity 0.5s,transform 0.5s;pointer-events:none;}
+#instruction.hide{opacity:0;transform:translateX(-50%) translateY(8px);}
+.blink{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--orange);margin-right:8px;vertical-align:middle;animation:blink 1.4s ease-in-out infinite;}
+#tip{position:fixed;z-index:999;background:#fff;border:1px solid var(--border);border-radius:7px;padding:8px 14px;pointer-events:none;display:none;box-shadow:0 8px 24px rgba(10,22,40,0.12);}
+#tip.on{border-color:var(--orange);}
+.tip-name{font-size:12px;font-weight:700;color:var(--text);}
+.tip-status{font-size:10px;color:var(--muted);margin-top:2px;}
+.tip-status.done{color:var(--green);}
+
+/* ── PANEL ── */
+#panel{width:var(--pw);background:var(--surface);border-left:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;transform:translateX(100%);transition:transform 0.36s cubic-bezier(0.4,0,0.2,1);z-index:10;box-shadow:-4px 0 24px rgba(10,22,40,0.08);}
+#panel.open{transform:translateX(0);}
+.p-head{padding:13px 18px 11px;border-bottom:3px solid var(--orange);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--navy);}
+.p-title{display:flex;align-items:center;gap:8px;}
+.p-flag{font-size:22px;}
+.p-cname{font-size:13px;font-weight:800;letter-spacing:0.5px;color:#fff;text-transform:uppercase;}
+.p-close{background:none;border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.6);width:26px;height:26px;border-radius:4px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all 0.18s;}
+.p-close:hover{border-color:#fff;color:#fff;}
+.p-scroll{flex:1;overflow-y:auto;padding:15px 18px;background:var(--surface2);}
+.p-scroll::-webkit-scrollbar{width:4px;}
+.p-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.p-foot{padding:11px 18px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;background:var(--surface);}
+
+/* ── FIELD BLOCKS ── */
+.fb{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:12px;}
+.flabel{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.flabel::before{content:'';display:inline-block;width:3px;height:13px;background:var(--orange);border-radius:2px;flex-shrink:0;}
+
+/* ── SITES LIST ── */
+.sites-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.site-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;overflow:hidden;transition:border-color 0.2s;}
+.site-card.has-place{border-color:rgba(255,102,0,0.4);background:#fff;}
+.site-card-top{display:flex;align-items:center;gap:8px;padding:8px 10px;}
+.site-num{font-size:10px;font-weight:700;color:var(--muted);flex-shrink:0;width:18px;text-align:center;}
+.site-addr-wrap{flex:1;position:relative;}
+.site-addr{width:100%;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--body);font-size:13px;font-weight:500;padding:0;}
+.site-addr::placeholder{color:var(--muted);}
+.site-clear{background:none;border:none;cursor:pointer;color:var(--muted);font-size:12px;padding:2px;line-height:1;transition:color 0.15s;flex-shrink:0;}
+.site-clear:hover{color:var(--red);}
+.site-meta{display:flex;align-items:center;gap:7px;padding:0 10px 9px 36px;}
+.tier-badge{font-size:8px;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:3px;font-weight:700;}
+.tier-1{background:rgba(255,102,0,0.1);border:1px solid rgba(255,102,0,0.3);color:var(--orange);}
+.tier-2{background:rgba(0,179,122,0.1);border:1px solid rgba(0,179,122,0.25);color:var(--green);}
+.tier-3{background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);color:var(--amber);}
+.tier-rural{background:rgba(232,52,74,0.1);border:1px solid rgba(232,52,74,0.25);color:var(--red);}
+.site-cost{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto;}
+.site-cost .sc-val{color:var(--navy);font-weight:700;}
+
+.add-site-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fff;border:1px dashed var(--border);border-radius:6px;cursor:pointer;transition:all 0.18s;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;width:100%;}
+.add-site-btn:hover{border-color:var(--orange);color:var(--orange);background:var(--orange-dim);}
+.add-icon{width:18px;height:18px;border:1px solid currentColor;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+
+/* ── SITE ACTIONS ROW ── */
+.site-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:0;}
+.upload-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fff;border:1px dashed rgba(100,80,200,0.35);border-radius:6px;cursor:pointer;transition:all 0.18s;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;width:100%;}
+.upload-btn:hover{border-color:rgba(100,80,200,0.7);color:#6450C8;background:rgba(100,80,200,0.06);}
+.upload-icon{width:18px;height:18px;border:1px solid currentColor;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
+#xl-file-input{display:none;}
+
+/* ── IMPORT MODAL ── */
+#import-overlay{position:fixed;inset:0;background:rgba(10,22,40,0.55);z-index:600;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+#import-overlay.open{display:flex;}
+.im-box{background:#fff;border:1px solid var(--border);border-radius:10px;width:90%;max-width:620px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(10,22,40,0.2);overflow:hidden;}
+.im-head{padding:16px 20px 14px;border-bottom:3px solid var(--orange);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--navy);}
+.im-title{font-size:12px;font-weight:800;letter-spacing:1.5px;color:#fff;text-transform:uppercase;}
+.im-close{background:none;border:1px solid rgba(255,255,255,0.25);color:rgba(255,255,255,0.6);width:26px;height:26px;border-radius:4px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.im-close:hover{border-color:#fff;color:#fff;}
+.im-body{flex:1;overflow-y:auto;padding:18px 20px;background:var(--surface2);}
+.im-body::-webkit-scrollbar{width:4px;}
+.im-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.im-stat{display:flex;gap:12px;margin-bottom:16px;}
+.im-stat-item{background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 14px;flex:1;text-align:center;box-shadow:0 2px 8px rgba(10,22,40,0.06);}
+.im-stat-n{font-size:22px;font-weight:900;color:var(--orange);}
+.im-stat-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-top:2px;}
+.im-section{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;margin-top:14px;}
+.im-map-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.im-map-item{background:#fff;border:1px solid var(--border);border-radius:7px;padding:11px 13px;box-shadow:0 1px 4px rgba(10,22,40,0.05);}
+.im-map-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+.im-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;color:var(--text);font-family:var(--mono);font-size:11px;outline:none;cursor:pointer;appearance:none;transition:border-color 0.15s;}
+.im-select:focus{border-color:var(--orange);}
+.im-preview-table{width:100%;border-collapse:collapse;font-size:10px;background:#fff;border-radius:6px;overflow:hidden;}
+.im-preview-table th{background:var(--navy);padding:7px 11px;text-align:left;font-size:8px;font-weight:700;letter-spacing:1.5px;color:rgba(255,255,255,0.6);text-transform:uppercase;white-space:nowrap;}
+.im-preview-table td{padding:7px 11px;border-bottom:1px solid var(--border2);color:var(--text2);font-family:var(--mono);font-size:10px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.im-preview-table tr:last-child td{border-bottom:none;}
+.im-preview-table tr:hover td{background:var(--orange-dim);}
+.im-foot{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;align-items:center;flex-shrink:0;background:#fff;}
+.im-count-info{font-size:11px;font-weight:500;color:var(--muted);}
+.im-count-info strong{color:var(--text);font-weight:700;}
+.im-progress{margin-top:14px;display:none;}
+.im-prog-bar-wrap{height:5px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:7px;}
+.im-prog-bar{height:100%;background:linear-gradient(90deg,var(--orange),var(--orange-light));border-radius:3px;transition:width 0.3s;width:0%;}
+.im-prog-label{font-size:9px;font-weight:600;color:var(--muted);letter-spacing:1px;text-align:center;}
+
+/* ── CIRCUIT GRID ── */
+.conn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.conn-card{padding:9px 7px;text-align:center;background:#fff;border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all 0.16s;}
+.conn-card:hover{border-color:var(--orange);box-shadow:0 2px 8px rgba(255,102,0,0.1);}
+.conn-card.sel{border-color:var(--orange);background:var(--orange-dim);box-shadow:0 2px 8px rgba(255,102,0,0.15);}
+.conn-badge{font-size:11px;font-weight:700;letter-spacing:0.3px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.conn-card.sel .conn-badge{color:var(--orange);}
+.conn-sub{font-size:8px;color:var(--muted);text-transform:uppercase;}
+
+/* ── BANDWIDTH ── */
+.bw-row-wrap{padding:8px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-top:8px;}
+.bw-header{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.bw-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;}
+.bw-line{flex:1;height:1px;background:var(--border);}
+.bw-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.bwc{padding:4px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--text2);cursor:pointer;transition:all 0.14s;}
+.bwc:hover{border-color:var(--orange);color:var(--orange);}
+.bwc.sel{background:var(--orange-dim);border-color:var(--orange);color:var(--orange);font-weight:700;}
+
+/* ── TERTIARY TOGGLE ── */
+.tert-toggle{display:flex;align-items:center;gap:9px;padding:10px 12px;background:#fff;border:1px dashed var(--border);border-radius:6px;cursor:pointer;transition:all 0.18s;margin-bottom:12px;}
+.tert-toggle:hover{border-color:var(--orange);background:var(--orange-dim);}
+.tert-icon{width:18px;height:18px;border:1px solid var(--muted);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);flex-shrink:0;transition:all 0.15s;}
+.tert-toggle:hover .tert-icon{border-color:var(--orange);color:var(--orange);}
+.tert-txt{font-size:11px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;color:var(--muted);}
+.tert-toggle:hover .tert-txt{color:var(--orange);}
+.rem-link{margin-left:auto;font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--red);opacity:0.7;cursor:pointer;}
+.rem-link:hover{opacity:1;}
+
+/* ── SPEND INPUT ── */
+.spend-wrap{position:relative;}
+.spend-wrap::before{content:'$';position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:var(--mono);font-size:12px;pointer-events:none;}
+.spend-in{width:100%;background:#fff;border:1px solid var(--border);border-radius:6px;padding:9px 11px 9px 24px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;transition:border-color 0.2s;}
+.spend-in:focus{border-color:var(--orange);}
+.spend-in::placeholder{color:var(--muted);}
+
+/* ── COST BOX ── */
+.cost-box{background:#fff;border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:11px;}
+.cost-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.cost-lbl{font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.cost-val{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);}
+.cost-val.green{color:var(--green);}
+.cost-val.amber{color:var(--amber);}
+.cost-val.red{color:var(--red);}
+.cost-div{height:1px;background:var(--border);margin:7px 0;}
+.cost-note{font-size:9px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--border2);}
+
+/* ── SITE BREAKDOWN ── */
+.site-breakdown{margin-top:8px;}
+.sb-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border2);}
+.sb-row:last-child{border-bottom:none;}
+.sb-addr{font-size:10px;color:var(--text2);max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-cost{font-family:var(--mono);font-size:10px;color:var(--text);font-weight:600;}
+
+/* ── SAVINGS CTA ── */
+.savings-cta{margin-top:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff;box-shadow:0 2px 12px rgba(10,22,40,0.06);}
+.sq{padding:14px 16px 12px;background:linear-gradient(135deg,var(--navy),var(--navy2));}
+.sq-lbl{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.5);margin-bottom:5px;}
+.sq-text{font-size:17px;font-weight:800;color:#fff;}
+.cta-btns{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--border);}
+.cta-btn{background:none;border:none;cursor:pointer;padding:14px 10px;text-align:center;transition:background 0.18s;}
+.cta-btn-y{border-right:1px solid var(--border);}
+.cta-btn-y:hover{background:rgba(0,179,122,0.06);}
+.cta-btn-n:hover{background:rgba(255,102,0,0.06);}
+.cb-label{display:block;font-family:var(--body);font-size:18px;font-weight:900;letter-spacing:0.5px;margin-bottom:3px;}
+.cb-sub{display:block;font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.cta-res{display:none;padding:16px;animation:fadein 0.28s ease;}
+.cta-res.show{display:block;}
+
+/* ── OTHER COUNTRIES ── */
+.oc-header{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:10px 0 7px;border-top:1px solid var(--border);margin-top:8px;}
+.oc-item{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2);}
+.oc-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:5px;background:var(--orange);box-shadow:0 0 5px rgba(255,102,0,0.4);}
+.oc-info{flex:1;min-width:0;}
+.oc-name{font-size:12px;font-weight:700;color:var(--text);}
+.oc-detail{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:1px;line-height:1.5;}
+.oc-edit{background:none;border:1px solid var(--border);border-radius:3px;color:var(--muted);padding:2px 7px;font-size:8px;cursor:pointer;font-family:var(--body);font-weight:600;letter-spacing:1px;text-transform:uppercase;transition:all 0.14s;flex-shrink:0;}
+.oc-edit:hover{border-color:var(--orange);color:var(--orange);}
+
+/* ── STATUS BAR ── */
+#sb{position:relative;z-index:20;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;background:var(--navy);border-top:3px solid var(--orange);flex-shrink:0;}
+.metrics{display:flex;gap:0;align-items:stretch;height:100%;}
+.metric{display:flex;flex-direction:column;justify-content:center;padding:0 20px;border-right:1px solid rgba(255,255,255,0.08);}
+.metric:first-child{padding-left:0;}
+.ml{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:2px;color:rgba(255,255,255,0.4);margin-bottom:2px;}
+.mv{font-size:17px;font-weight:900;color:#fff;line-height:1;}
+.mv.green{color:#4AE8A8;}
+.ver{font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,0.25);font-weight:500;}
+
+/* ── MODALS ── */
+.overlay{position:fixed;inset:0;background:rgba(10,22,40,0.55);z-index:500;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.overlay.open{display:flex;}
+.modal{background:#fff;border:1px solid var(--border);border-radius:10px;padding:26px;width:90%;max-width:460px;box-shadow:0 20px 60px rgba(10,22,40,0.2);}
+.modal-title{font-size:11px;font-weight:800;letter-spacing:2px;color:var(--orange);text-transform:uppercase;margin-bottom:6px;}
+.modal-desc{color:var(--text2);font-size:12px;line-height:1.6;margin-bottom:16px;}
+.modal-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:10px 13px;color:var(--text);font-family:var(--mono);font-size:12px;outline:none;transition:border-color 0.2s;margin-bottom:6px;}
+.modal-input:focus{border-color:var(--orange);}
+.modal-hint{font-size:10px;color:var(--muted);margin-bottom:16px;line-height:1.5;}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+
+/* ── API KEY BANNER ── */
+#apikey-banner{display:none;position:absolute;top:0;left:0;right:0;background:rgba(245,158,11,0.1);border-bottom:1px solid rgba(245,158,11,0.3);padding:8px 18px;z-index:30;text-align:center;font-size:11px;color:var(--amber);}
+#apikey-banner a{color:var(--orange);cursor:pointer;text-decoration:underline;}
+
+/* ── D3 MAP ── */
+.cp{stroke:#C8D4E4;stroke-width:0.5;cursor:default;transition:fill 0.22s;}
+.cp.ck{cursor:pointer;}
+.gr{fill:none;stroke:rgba(10,22,40,0.05);stroke-width:0.5;}
+.sp{fill:none;stroke:rgba(10,22,40,0.07);stroke-width:0.8;}
+.arc{fill:none;stroke-dasharray:4 5;animation:af 20s linear infinite;}
+@keyframes af{to{stroke-dashoffset:-180}}
+.dring{fill:none;stroke-width:1.5;animation:ro 2.5s ease-out infinite;}
+@keyframes ro{0%{r:4;opacity:0.6}100%{r:18;opacity:0}}
+
+/* ── MAPS AUTOCOMPLETE OVERRIDE ── */
+.pac-container{background:#fff!important;border:1px solid var(--border)!important;border-radius:6px!important;box-shadow:0 8px 24px rgba(10,22,40,0.12)!important;font-family:var(--body)!important;margin-top:4px!important;}
+.pac-item{padding:8px 13px!important;border-top:1px solid var(--border2)!important;color:var(--text2)!important;font-size:12px!important;cursor:pointer!important;}
+.pac-item:hover{background:var(--orange-dim)!important;}
+.pac-item-query{color:var(--text)!important;font-weight:600!important;}
+.pac-matched{color:var(--orange)!important;}
+.pac-icon{display:none!important;}
+</style>
+</head>
+<body>
+<div id="tip"><div class="tip-name" id="tn"></div><div class="tip-status" id="ts"></div></div>
+
+<!-- API KEY BANNER -->
+<div id="apikey-banner">
+  ⚠ Google Maps API key not set — site-level addressing disabled.
+  <a onclick="openApiKeyModal()">Add API key to enable address search →</a>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="expereo-logo">
+    <div class="expereo-wordmark">expere<span>o</span></div>
+    <div class="logo-divider"></div>
+    <div class="logo-sub">Global Connectivity Planner</div>
+  </div>
+  <div class="hdr-mid">Network Assessment Tool</div>
+  <div class="hdr-right">
+    <button class="btn btn-ghost" title="Google Maps API Key" onclick="openApiKeyModal()" style="font-size:14px;padding:6px 10px;">🗝</button>
+    <button class="btn btn-ghost" onclick="resetAll()">Reset</button>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <div id="map-wrap">
+    <div id="instruction" style="display:none"><span class="blink"></span>Click any country to configure connectivity requirements</div>
+
+    <!-- FLOATING MAP UI -->
+    <div id="map-ui" style="position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:10px;align-items:center;">
+      <!-- Upload CTA - always visible -->
+      <button onclick="document.getElementById('xl-file-input').click()"
+        style="display:flex;align-items:center;gap:8px;padding:10px 18px;background:var(--orange);border:none;border-radius:8px;cursor:pointer;color:#fff;font-family:var(--body);font-size:12px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;box-shadow:0 4px 16px rgba(255,102,0,0.4);transition:all 0.2s;"
+        onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 6px 20px rgba(255,102,0,0.5)'"
+        onmouseout="this.style.transform='';this.style.boxShadow='0 4px 16px rgba(255,102,0,0.4)'">
+        <span style="font-size:16px">📊</span> Upload Site List
+      </button>
+      <!-- divider -->
+      <div style="width:1px;height:28px;background:rgba(10,22,40,0.15);"></div>
+      <!-- or click map -->
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.92);backdrop-filter:blur(8px);padding:9px 16px;border-radius:8px;border:1px solid var(--border);box-shadow:0 2px 12px rgba(10,22,40,0.1);">
+        <span style="font-size:14px">🗺️</span>
+        <span style="font-size:11px;font-weight:600;color:var(--text2);">Or click any country on the map</span>
+      </div>
+    </div>
+
+  </div>
+  <div id="panel">
+    <div class="p-head">
+      <div class="p-title">
+        <span class="p-flag" id="p-flag"></span>
+        <span class="p-cname" id="p-cname">—</span>
+      </div>
+      <button class="p-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="p-scroll" id="p-scroll"></div>
+    <div class="p-foot">
+      <button class="btn btn-ghost-dark" onclick="closePanel()">Cancel</button>
+      <button class="btn btn-cta" onclick="saveConfig()">Save Country</button>
+    </div>
+  </div>
+</main>
+
+<!-- EXCEL IMPORT MODAL -->
+<input type="file" id="xl-file-input" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(this)">
+<div id="import-overlay">
+  <div class="im-box">
+    <div class="im-head">
+      <div>
+        <div class="im-title">📊 Spreadsheet Import</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px" id="im-filename">No file loaded</div>
+      </div>
+      <button class="im-close" onclick="closeImport()">✕</button>
+    </div>
+    <div class="im-body">
+      <div class="im-stat" id="im-stats">
+        <div class="im-stat-item"><div class="im-stat-n" id="im-stat-rows">—</div><div class="im-stat-l">Rows</div></div>
+        <div class="im-stat-item"><div class="im-stat-n" id="im-stat-cols">—</div><div class="im-stat-l">Columns</div></div>
+        <div class="im-stat-item"><div class="im-stat-n" id="im-stat-valid">—</div><div class="im-stat-l">Valid Sites</div></div>
+      </div>
+
+      <div class="im-section">Map Your Columns</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.6">Tell us which columns contain the address and site name. We'll do the rest.</div>
+      <div class="im-map-grid">
+        <div class="im-map-item">
+          <div class="im-map-lbl">★ Site Address <span style="color:var(--red)">*</span></div>
+          <select class="im-select" id="im-col-address" onchange="refreshPreview()"><option value="">— select column —</option></select>
+        </div>
+        <div class="im-map-item">
+          <div class="im-map-lbl">Site Name / Label</div>
+          <select class="im-select" id="im-col-name" onchange="refreshPreview()"><option value="">— optional —</option></select>
+        </div>
+      </div>
+
+      <div class="im-section">Preview <span id="im-preview-count" style="color:var(--accent);font-family:var(--hud)"></span></div>
+      <div style="overflow-x:auto;">
+        <table class="im-preview-table" id="im-preview-table">
+          <thead><tr><th>#</th><th>Address</th><th>Name</th></tr></thead>
+          <tbody id="im-preview-body"><tr><td colspan="3" style="text-align:center;color:var(--muted);padding:14px">Select an address column to preview</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="im-progress" id="im-progress">
+        <div class="im-prog-bar-wrap"><div class="im-prog-bar" id="im-prog-bar"></div></div>
+        <div class="im-prog-label" id="im-prog-label">Geocoding addresses…</div>
+      </div>
+    </div>
+    <div class="im-foot">
+      <div class="im-count-info" id="im-foot-info">Select an address column to continue</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost-dark" onclick="closeImport()">Close</button>
+        <button class="btn" id="im-cancel-btn" style="display:none;background:#fff;border:1px solid var(--red);color:var(--red);font-weight:700;" onclick="importCancelled=true">Stop</button>
+        <button class="btn btn-ghost-dark" id="im-skip-btn" disabled onclick="confirmImport(true)" style="font-size:10px;opacity:0.7;" title="Import all addresses without geocoding — faster but no location tier pricing">Skip Geocoding</button>
+        <button class="btn btn-cta" id="im-import-btn" disabled onclick="confirmImport(false)">Import Sites →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="sb">
+  <div class="metrics">
+    <div class="metric"><span class="ml">Countries</span><span class="mv" id="m-cnt">0</span></div>
+    <div class="metric"><span class="ml">Sites</span><span class="mv" id="m-sites">0</span></div>
+    <div class="metric"><span class="ml">Est. Market</span><span class="mv" id="m-market">—</span></div>
+    <div class="metric"><span class="ml">Your Spend</span><span class="mv" id="m-spend">—</span></div>
+    <div class="metric"><span class="ml">Savings</span><span class="mv green" id="m-save">—</span></div>
+  </div>
+  <span class="ver">SECURE · ASSESSMENT v4.0</span>
+</div>
+
+<!-- API KEY MODAL -->
+<div class="overlay" id="apikey-overlay">
+  <div class="modal">
+    <div class="modal-title">Google Maps API Key</div>
+    <div class="modal-desc">Required for address autocomplete and precise location-based pricing. Your key stays in this browser session only.</div>
+    <input id="apikey-input" class="modal-input" type="password" placeholder="AIza...">
+    <div class="modal-hint">
+      Get a free key at <strong style="color:var(--text)">console.cloud.google.com</strong> → Enable <strong style="color:var(--text)">Maps JavaScript API</strong> + <strong style="color:var(--text)">Places API</strong>.<br>
+      Restrict the key to your domain for production use.
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeApiKeyModal()">Cancel</button>
+      <button class="btn btn-cta" onclick="applyApiKey()">Apply Key</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ══════════════════════════════════════════════════════
+   TIER 1 GLOBAL BUSINESS HUB CITIES
+   (carrier-dense, most competitive pricing)
+══════════════════════════════════════════════════════ */
+const TIER1_CITIES = new Set([
+  'new york','los angeles','chicago','dallas','houston','san francisco','seattle','miami','atlanta','boston','washington','denver','phoenix','las vegas','portland',
+  'london','paris','frankfurt','amsterdam','madrid','barcelona','milan','rome','zurich','geneva','brussels','vienna','stockholm','oslo','copenhagen','helsinki','dublin','lisbon',
+  'tokyo','osaka','singapore','hong kong','sydney','melbourne','seoul','shanghai','beijing','shenzhen','guangzhou','taipei','bangalore','mumbai','delhi','dubai','abu dhabi','riyadh',
+  'toronto','montreal','vancouver','mexico city','são paulo','buenos aires','santiago','bogotá','lima',
+  'johannesburg','cape town','nairobi','lagos','casablanca',
+  'istanbul','warsaw','prague','budapest','bucharest','athens',
+  'kuala lumpur','jakarta','bangkok','manila','ho chi minh city','hanoi',
+  'auckland','zürich'
+]);
+
+const TIER2_CITIES = new Set([
+  'manchester','birmingham','leeds','glasgow','edinburgh','bristol','sheffield','liverpool',
+  'lyon','marseille','toulouse','bordeaux','lille','strasbourg','nantes',
+  'hamburg','munich','berlin','cologne','dusseldorf','stuttgart','dresden','leipzig',
+  'antwerp','rotterdam','the hague','utrecht',
+  'porto','seville','valencia','bilbao','zaragoza',
+  'turin','naples','florence','bologna','genoa','venice',
+  'gothenburg','malmo','aarhus','tampere','espoo',
+  'montreal','calgary','edmonton','winnipeg','ottawa','quebec city',
+  'guadalajara','monterrey','puebla',
+  'pune','chennai','hyderabad','kolkata','ahmedabad',
+  'osaka','nagoya','sapporo','fukuoka','kobe',
+  'perth','brisbane','adelaide','gold coast','canberra',
+  'cape town','durban','pretoria','accra','dar es salaam','addis ababa',
+  'casablanca','tunis','algiers','cairo','alexandria',
+  'jeddah','doha','manama','kuwait city','muscat','amman','beirut','tel aviv',
+  'karachi','lahore','dhaka','colombo','kathmandu',
+  'ho chi minh city','medan','surabaya','cebu','davao',
+  'auckland','wellington','christchurch',
+  'santiago','medellín','cali','lima','montevideo','asunción',
+  'beirut','tunis','zagreb','sofia','belgrade','vilnius','riga','tallinn','bratislava','ljubljana',
+  'almaty','tashkent','baku','tbilisi','yerevan','minsk'
+]);
+
+/* ══════════════════════════════════════════════════════
+   COUNTRY REGISTRY — ISO numeric → { n:name, f:flag, m:cost multiplier }
+   m = 1.0 is US baseline. Reflects carrier market competition & infrastructure
+══════════════════════════════════════════════════════ */
+const CTRY = {
+  4:{n:'Afghanistan',f:'🇦🇫',m:3.2}, 8:{n:'Albania',f:'🇦🇱',m:1.1},
+  12:{n:'Algeria',f:'🇩🇿',m:1.8}, 24:{n:'Angola',f:'🇦🇴',m:3.0},
+  32:{n:'Argentina',f:'🇦🇷',m:1.3}, 36:{n:'Australia',f:'🇦🇺',m:1.25},
+  40:{n:'Austria',f:'🇦🇹',m:0.9}, 48:{n:'Bahrain',f:'🇧🇭',m:1.5},
+  50:{n:'Bangladesh',f:'🇧🇩',m:1.1}, 56:{n:'Belgium',f:'🇧🇪',m:0.88},
+  64:{n:'Bhutan',f:'🇧🇹',m:2.5}, 68:{n:'Bolivia',f:'🇧🇴',m:2.0},
+  70:{n:'Bosnia',f:'🇧🇦',m:1.1}, 72:{n:'Botswana',f:'🇧🇼',m:2.2},
+  76:{n:'Brazil',f:'🇧🇷',m:1.2}, 84:{n:'Belize',f:'🇧🇿',m:2.4},
+  96:{n:'Brunei',f:'🇧🇳',m:1.3}, 100:{n:'Bulgaria',f:'🇧🇬',m:1.0},
+  104:{n:'Myanmar',f:'🇲🇲',m:2.2}, 112:{n:'Belarus',f:'🇧🇾',m:1.0},
+  116:{n:'Cambodia',f:'🇰🇭',m:1.5}, 120:{n:'Cameroon',f:'🇨🇲',m:3.0},
+  124:{n:'Canada',f:'🇨🇦',m:1.0}, 132:{n:'Cape Verde',f:'🇨🇻',m:3.5},
+  140:{n:'Cent. African Rep.',f:'🇨🇫',m:4.5}, 144:{n:'Sri Lanka',f:'🇱🇰',m:1.3},
+  148:{n:'Chad',f:'🇹🇩',m:4.5}, 152:{n:'Chile',f:'🇨🇱',m:1.1},
+  156:{n:'China',f:'🇨🇳',m:1.0}, 170:{n:'Colombia',f:'🇨🇴',m:1.3},
+  174:{n:'Comoros',f:'🇰🇲',m:5.0}, 178:{n:'Rep. Congo',f:'🇨🇬',m:3.5},
+  180:{n:'DR Congo',f:'🇨🇩',m:4.0}, 188:{n:'Costa Rica',f:'🇨🇷',m:1.4},
+  191:{n:'Croatia',f:'🇭🇷',m:0.95}, 192:{n:'Cuba',f:'🇨🇺',m:3.0},
+  203:{n:'Czech Republic',f:'🇨🇿',m:0.88}, 204:{n:'Benin',f:'🇧🇯',m:3.5},
+  208:{n:'Denmark',f:'🇩🇰',m:0.82}, 214:{n:'Dominican Rep.',f:'🇩🇴',m:1.6},
+  218:{n:'Ecuador',f:'🇪🇨',m:1.5}, 222:{n:'El Salvador',f:'🇸🇻',m:1.8},
+  231:{n:'Ethiopia',f:'🇪🇹',m:3.0}, 233:{n:'Estonia',f:'🇪🇪',m:0.85},
+  242:{n:'Fiji',f:'🇫🇯',m:3.2}, 246:{n:'Finland',f:'🇫🇮',m:0.8},
+  250:{n:'France',f:'🇫🇷',m:0.87}, 266:{n:'Gabon',f:'🇬🇦',m:3.2},
+  268:{n:'Georgia',f:'🇬🇪',m:1.1}, 276:{n:'Germany',f:'🇩🇪',m:0.85},
+  288:{n:'Ghana',f:'🇬🇭',m:2.2}, 300:{n:'Greece',f:'🇬🇷',m:1.0},
+  320:{n:'Guatemala',f:'🇬🇹',m:1.7}, 328:{n:'Guyana',f:'🇬🇾',m:2.5},
+  332:{n:'Haiti',f:'🇭🇹',m:3.2}, 340:{n:'Honduras',f:'🇭🇳',m:1.8},
+  348:{n:'Hungary',f:'🇭🇺',m:0.92}, 356:{n:'India',f:'🇮🇳',m:0.62},
+  360:{n:'Indonesia',f:'🇮🇩',m:1.1}, 364:{n:'Iran',f:'🇮🇷',m:2.5},
+  368:{n:'Iraq',f:'🇮🇶',m:2.8}, 372:{n:'Ireland',f:'🇮🇪',m:0.88},
+  376:{n:'Israel',f:'🇮🇱',m:1.1}, 380:{n:'Italy',f:'🇮🇹',m:0.92},
+  388:{n:'Jamaica',f:'🇯🇲',m:2.2}, 392:{n:'Japan',f:'🇯🇵',m:1.0},
+  398:{n:'Kazakhstan',f:'🇰🇿',m:1.4}, 400:{n:'Jordan',f:'🇯🇴',m:1.5},
+  404:{n:'Kenya',f:'🇰🇪',m:1.8}, 410:{n:'South Korea',f:'🇰🇷',m:0.88},
+  414:{n:'Kuwait',f:'🇰🇼',m:1.5}, 418:{n:'Laos',f:'🇱🇦',m:2.0},
+  422:{n:'Lebanon',f:'🇱🇧',m:2.2}, 426:{n:'Lesotho',f:'🇱🇸',m:2.8},
+  428:{n:'Latvia',f:'🇱🇻',m:0.87}, 430:{n:'Liberia',f:'🇱🇷',m:3.8},
+  440:{n:'Lithuania',f:'🇱🇹',m:0.87}, 450:{n:'Madagascar',f:'🇲🇬',m:4.0},
+  454:{n:'Malawi',f:'🇲🇼',m:3.5}, 458:{n:'Malaysia',f:'🇲🇾',m:0.85},
+  466:{n:'Mali',f:'🇲🇱',m:4.0}, 478:{n:'Mauritania',f:'🇲🇷',m:4.0},
+  484:{n:'Mexico',f:'🇲🇽',m:1.1}, 496:{n:'Mongolia',f:'🇲🇳',m:1.8},
+  498:{n:'Moldova',f:'🇲🇩',m:1.1}, 499:{n:'Montenegro',f:'🇲🇪',m:1.1},
+  504:{n:'Morocco',f:'🇲🇦',m:1.5}, 508:{n:'Mozambique',f:'🇲🇿',m:3.5},
+  512:{n:'Oman',f:'🇴🇲',m:1.5}, 516:{n:'Namibia',f:'🇳🇦',m:2.0},
+  524:{n:'Nepal',f:'🇳🇵',m:1.8}, 528:{n:'Netherlands',f:'🇳🇱',m:0.82},
+  548:{n:'Vanuatu',f:'🇻🇺',m:4.5}, 554:{n:'New Zealand',f:'🇳🇿',m:1.2},
+  558:{n:'Nicaragua',f:'🇳🇮',m:2.0}, 562:{n:'Niger',f:'🇳🇪',m:4.2},
+  566:{n:'Nigeria',f:'🇳🇬',m:2.0}, 578:{n:'Norway',f:'🇳🇴',m:0.85},
+  586:{n:'Pakistan',f:'🇵🇰',m:1.4}, 591:{n:'Panama',f:'🇵🇦',m:1.4},
+  598:{n:'Papua New Guinea',f:'🇵🇬',m:4.0}, 600:{n:'Paraguay',f:'🇵🇾',m:1.5},
+  604:{n:'Peru',f:'🇵🇪',m:1.3}, 608:{n:'Philippines',f:'🇵🇭',m:1.1},
+  616:{n:'Poland',f:'🇵🇱',m:0.87}, 620:{n:'Portugal',f:'🇵🇹',m:0.9},
+  626:{n:'Timor-Leste',f:'🇹🇱',m:4.5}, 630:{n:'Puerto Rico',f:'🇵🇷',m:1.1},
+  634:{n:'Qatar',f:'🇶🇦',m:1.5}, 642:{n:'Romania',f:'🇷🇴',m:0.88},
+  643:{n:'Russia',f:'🇷🇺',m:0.92}, 646:{n:'Rwanda',f:'🇷🇼',m:2.5},
+  682:{n:'Saudi Arabia',f:'🇸🇦',m:1.4}, 686:{n:'Senegal',f:'🇸🇳',m:3.0},
+  688:{n:'Serbia',f:'🇷🇸',m:1.0}, 694:{n:'Sierra Leone',f:'🇸🇱',m:4.0},
+  702:{n:'Singapore',f:'🇸🇬',m:0.88}, 703:{n:'Slovakia',f:'🇸🇰',m:0.9},
+  705:{n:'Slovenia',f:'🇸🇮',m:0.92}, 706:{n:'Somalia',f:'🇸🇴',m:5.0},
+  710:{n:'South Africa',f:'🇿🇦',m:1.5}, 716:{n:'Zimbabwe',f:'🇿🇼',m:3.0},
+  724:{n:'Spain',f:'🇪🇸',m:0.88}, 740:{n:'Suriname',f:'🇸🇷',m:2.5},
+  752:{n:'Sweden',f:'🇸🇪',m:0.82}, 756:{n:'Switzerland',f:'🇨🇭',m:0.9},
+  760:{n:'Syria',f:'🇸🇾',m:4.0}, 764:{n:'Thailand',f:'🇹🇭',m:0.9},
+  768:{n:'Togo',f:'🇹🇬',m:3.5}, 776:{n:'Tonga',f:'🇹🇴',m:4.5},
+  792:{n:'Turkey',f:'🇹🇷',m:0.95}, 800:{n:'Uganda',f:'🇺🇬',m:2.5},
+  804:{n:'Ukraine',f:'🇺🇦',m:0.88}, 807:{n:'N. Macedonia',f:'🇲🇰',m:1.1},
+  818:{n:'Egypt',f:'🇪🇬',m:1.3}, 826:{n:'United Kingdom',f:'🇬🇧',m:0.9},
+  834:{n:'Tanzania',f:'🇹🇿',m:2.5}, 840:{n:'United States',f:'🇺🇸',m:1.0},
+  854:{n:'Burkina Faso',f:'🇧🇫',m:4.0}, 858:{n:'Uruguay',f:'🇺🇾',m:1.2},
+  862:{n:'Venezuela',f:'🇻🇪',m:2.5}, 887:{n:'Yemen',f:'🇾🇪',m:4.5},
+  894:{n:'Zambia',f:'🇿🇲',m:2.5}, 31:{n:'Azerbaijan',f:'🇦🇿',m:1.3},
+  51:{n:'Armenia',f:'🇦🇲',m:1.2}, 275:{n:'Palestine',f:'🇵🇸',m:3.0},
+};
+
+/* ══════════════════════════════════════════════════════
+   CIRCUIT TYPES + BANDWIDTH
+══════════════════════════════════════════════════════ */
+const CONN = [
+  {id:'DIA',name:'DIA',sub:'Dedicated Internet'},
+  {id:'Broadband',name:'Broadband',sub:'Business Grade'},
+  {id:'MPLS',name:'MPLS',sub:'Private Network'},
+  {id:'SD-WAN',name:'SD-WAN',sub:'Software Defined'},
+  {id:'Satellite',name:'Satellite',sub:'VSAT / LEO'},
+  {id:'5G',name:'4G / 5G',sub:'Wireless Backup'},
+];
+const BW = {
+  DIA:       ['10 Mbps','50 Mbps','100 Mbps','500 Mbps','1 Gbps','10 Gbps'],
+  Broadband: ['50 Mbps','100 Mbps','250 Mbps','500 Mbps','1 Gbps'],
+  MPLS:      ['2 Mbps','10 Mbps','50 Mbps','100 Mbps','500 Mbps','1 Gbps'],
+  'SD-WAN':  ['10 Mbps','50 Mbps','100 Mbps','500 Mbps','1 Gbps','10 Gbps'],
+  Satellite: ['5 Mbps','10 Mbps','25 Mbps','50 Mbps','100 Mbps','200 Mbps'],
+  '5G':      ['25 Mbps','50 Mbps','100 Mbps','200 Mbps','300 Mbps'],
+};
+// Base cost per Mbps/month (USD) + minimum floor
+const BPM  = {DIA:4.5,Broadband:1.0,MPLS:16,'SD-WAN':6.5,Satellite:11,'5G':1.8};
+const FLOR = {DIA:280,Broadband:65,MPLS:450,'SD-WAN':380,Satellite:180,'5G':90};
+
+// Urban tier multipliers — applied on top of country base
+const TIER_MULT = {'tier1':0.82,'tier2':1.0,'tier3':1.35,'rural':2.5};
+const TIER_LABELS = {'tier1':'Tier 1 — Global Hub','tier2':'Tier 2 — Regional','tier3':'Tier 3 — Secondary','rural':'Rural / Industrial'};
+
+function parseMbps(s){if(!s)return 0;const n=parseFloat(s);return s.includes('Gbps')?n*1000:n;}
+function circuitCost(type,bw,countryMult,tierMult){
+  if(!type||!bw)return 0;
+  return Math.round(Math.max(FLOR[type]||0,(BPM[type]||0)*parseMbps(bw))*countryMult*tierMult);
+}
+function siteCost(site,cfg){
+  const cm=(CTRY[+cfg.isoId]||{m:1.5}).m;
+  const tm=TIER_MULT[site.tier||'tier2'];
+  return circuitCost(cfg.primary,cfg.primaryBw,cm,tm)
+       + circuitCost(cfg.secondary,cfg.secondaryBw,cm,tm)
+       + (cfg.hasTertiary?circuitCost(cfg.tertiary,cfg.tertiaryBw,cm,tm):0);
+}
+function totalCost(cfg){
+  if(!cfg.sites||cfg.sites.length===0){
+    // Fallback: single unnamed site at tier2
+    const cm=(CTRY[+cfg.isoId]||{m:1.5}).m;
+    return circuitCost(cfg.primary,cfg.primaryBw,cm,1.0)
+         + circuitCost(cfg.secondary,cfg.secondaryBw,cm,1.0)
+         + (cfg.hasTertiary?circuitCost(cfg.tertiary,cfg.tertiaryBw,cm,1.0):0);
+  }
+  return cfg.sites.reduce((s,site)=>s+siteCost(site,cfg),0);
+}
+
+/* ══════════════════════════════════════════════════════
+   TIER CLASSIFICATION — from Google Places result
+══════════════════════════════════════════════════════ */
+function classifyTier(place){
+  // Get locality name from address components
+  let cityName = '';
+  if(place.address_components){
+    for(const comp of place.address_components){
+      if(comp.types.includes('locality')||comp.types.includes('postal_town')){
+        cityName = comp.long_name.toLowerCase(); break;
+      }
+    }
+    if(!cityName){
+      for(const comp of place.address_components){
+        if(comp.types.includes('administrative_area_level_2')){
+          cityName = comp.long_name.toLowerCase(); break;
+        }
+      }
+    }
+  }
+
+  if(TIER1_CITIES.has(cityName)) return 'tier1';
+  if(TIER2_CITIES.has(cityName)) return 'tier2';
+
+  // Check place types for clues
+  const types = place.types||[];
+  if(types.includes('locality')||types.includes('political')){
+    return 'tier3';
+  }
+  if(types.includes('sublocality')||types.includes('neighborhood')||types.includes('route')||types.includes('street_address')){
+    // It's a street address — city name check already ran above; default tier3
+    return 'tier3';
+  }
+  // industrial, natural_feature, premise, etc = rural
+  return 'rural';
+}
+
+/* ══════════════════════════════════════════════════════
+   GOOGLE MAPS
+══════════════════════════════════════════════════════ */
+let mapsLoaded = false;
+let mapsApiKey = 'AIzaSyDzG1XOwxG-qYVCJZnbB4rQxrMjxcEVFLM';
+let pendingAutocompletes = [];
+
+function loadMapsScript(key){
+  mapsApiKey = key;
+  const s = document.createElement('script');
+  s.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=onMapsReady`;
+  s.async = true; s.defer = true;
+  document.head.appendChild(s);
+}
+window.onMapsReady = function(){
+  mapsLoaded = true;
+  document.getElementById('apikey-banner').style.display = 'none';
+  // Initialize any queued inputs
+  pendingAutocompletes.forEach(fn=>fn());
+  pendingAutocompletes = [];
+};
+
+function attachAutocomplete(inputEl, siteId){
+  const init = ()=>{
+    const ac = new google.maps.places.Autocomplete(inputEl, {
+      types:['geocode','establishment'],
+      fields:['formatted_address','geometry','address_components','types','name']
+    });
+    ac.addListener('place_changed', ()=>{
+      const place = ac.getPlace();
+      if(!place.geometry) return;
+      const tier = classifyTier(place);
+      const addr = place.formatted_address || place.name || inputEl.value;
+      updateSitePlaceData(siteId, {
+        address: addr,
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+        tier: tier,
+        name: place.name || addr
+      });
+    });
+  };
+  if(mapsLoaded) init();
+  else pendingAutocompletes.push(init);
+}
+
+/* ══════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════ */
+let state = {};      // keyed by ISO id string
+let activeId = null;
+let tempCfg = {};    // working copy while panel is open
+let siteIdSeq = 0;
+
+function newSite(){
+  return {id: 'site_'+(++siteIdSeq), address:'', lat:null, lng:null, tier:'tier2', name:''};
+}
+function defaultCfg(isoId){
+  return {
+    isoId, sites:[newSite()],
+    primary:'DIA', primaryBw:'100 Mbps',
+    secondary:'Broadband', secondaryBw:'100 Mbps',
+    hasTertiary:false, tertiary:'Satellite', tertiaryBw:'25 Mbps',
+    spend:''
+  };
+}
+
+/* ══════════════════════════════════════════════════════
+   D3 MAP
+══════════════════════════════════════════════════════ */
+const W=960,H=500;
+const svg=d3.select('#map-wrap').append('svg')
+  .attr('viewBox',`0 0 ${W} ${H}`).attr('preserveAspectRatio','xMidYMid meet');
+svg.append('rect').attr('width',W).attr('height',H).attr('fill','#E8EFF8');
+const proj=d3.geoNaturalEarth1().scale(153).translate([W/2,H/2]);
+const gp=d3.geoPath().projection(proj);
+svg.append('path').datum(d3.geoGraticule()()).attr('class','gr').attr('d',gp);
+svg.append('path').datum({type:'Sphere'}).attr('class','sp').attr('d',gp);
+const arcsG=svg.append('g'),mapG=svg.append('g'),dotsG=svg.append('g');
+const tip=document.getElementById('tip');
+let cfeats=[];
+
+function cfill(id){if(!CTRY[id])return '#C8D8EC';return state[String(id)]?'#FF6600':'#B8CCDF';}
+function chover(id){if(!CTRY[id])return '#C8D8EC';return state[String(id)]?'#FF8533':'#9BAFC4';}
+function refreshMap(){mapG.selectAll('.cp').attr('fill',d=>cfill(+d.id));}
+
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+  .then(r=>r.json())
+  .then(world=>{
+    cfeats=topojson.feature(world,world.objects.countries).features;
+    mapG.selectAll('.cp').data(cfeats).enter().append('path')
+      .attr('class',d=>`cp${CTRY[+d.id]?' ck':''}`)
+      .attr('d',gp).attr('fill',d=>cfill(+d.id))
+      .on('mousemove',function(evt,d){
+        const id=+d.id,cd=CTRY[id];
+        if(!cd)return;
+        tip.style.display='block';
+        tip.style.left=(evt.clientX+14)+'px';
+        tip.style.top=(evt.clientY-38)+'px';
+        document.getElementById('tn').textContent=cd.f+' '+cd.n;
+        const s=state[String(id)];
+        if(s&&s.sites&&s.sites.some(x=>x.address)){
+          const named=s.sites.filter(x=>x.address).length;
+          document.getElementById('ts').textContent=`✓ ${named} site${named!==1?'s':''} · ${s.primary}${s.primaryBw?' '+s.primaryBw:''} / ${s.secondary}${s.secondaryBw?' '+s.secondaryBw:''}`;
+          document.getElementById('ts').className='tip-status done';
+          tip.className='on';
+        } else if(s){
+          document.getElementById('ts').textContent=`✓ Configured · ${s.primary} / ${s.secondary}`;
+          document.getElementById('ts').className='tip-status done';
+          tip.className='on';
+        } else {
+          document.getElementById('ts').textContent='Click to configure';
+          document.getElementById('ts').className='tip-status';
+          tip.className='';
+        }
+        d3.select(this).attr('fill',chover(id));
+      })
+      .on('mouseleave',function(evt,d){
+        tip.style.display='none';
+        d3.select(this).attr('fill',cfill(+d.id));
+      })
+      .on('click',function(evt,d){
+        const id=+d.id;
+        if(!CTRY[id])return;
+        tip.style.display='none';
+        openPanel(id);
+      });
+    loadFromUrl();
+  })
+  .catch(()=>{
+    svg.append('text').attr('x',W/2).attr('y',H/2)
+      .attr('text-anchor','middle').attr('fill','#4a6a8a')
+      .attr('font-family','Rajdhani,sans-serif').attr('font-size','16px')
+      .text('Map loading — check connection.');
+  });
+
+/* ══════════════════════════════════════════════════════
+   PANEL — OPEN / CLOSE
+══════════════════════════════════════════════════════ */
+function openPanel(id){
+  activeId=String(id);
+  const cd=CTRY[id]||{n:'Unknown',f:'🌐'};
+  document.getElementById('p-flag').textContent=cd.f;
+  document.getElementById('p-cname').textContent=cd.n;
+  tempCfg=state[activeId]?JSON.parse(JSON.stringify(state[activeId])):defaultCfg(id);
+  // Ensure sites array exists
+  if(!tempCfg.sites||!Array.isArray(tempCfg.sites)||tempCfg.sites.length===0){
+    tempCfg.sites=[newSite()];
+  }
+  renderPanel();
+  document.getElementById('panel').classList.add('open');
+  document.getElementById('map-ui').style.display='none';
+}
+function closePanel(){
+  document.getElementById('panel').classList.remove('open');
+  document.getElementById('map-ui').style.display='flex';
+  activeId=null;
+}
+
+/* ══════════════════════════════════════════════════════
+   PANEL — RENDER
+══════════════════════════════════════════════════════ */
+function bwHtml(typeKey,bwKey){
+  const bws=BW[tempCfg[typeKey]]||[];
+  const cur=tempCfg[bwKey];
+  return `<div class="bw-row-wrap" id="bwwrap-${typeKey}">
+    <div class="bw-header"><span class="bw-lbl">Bandwidth</span><div class="bw-line"></div></div>
+    <div class="bw-chips">${bws.map(b=>`<div class="bwc${b===cur?' sel':''}" onclick="pickBw('${bwKey}','${b}',this)">${b}</div>`).join('')}</div>
+  </div>`;
+}
+function connHtml(label,typeKey,bwKey,removable){
+  return `<div class="fb" id="cb-${typeKey}">
+    <div class="flabel">${label}${removable?`<span class="rem-link" onclick="removeTertiary()" style="margin-left:auto">Remove ✕</span>`:''}</div>
+    <div class="conn-grid">${CONN.map(ct=>`
+      <div class="conn-card${tempCfg[typeKey]===ct.id?' sel':''}" onclick="pickConn('${typeKey}','${bwKey}','${ct.id}',this)">
+        <div class="conn-badge">${ct.name}</div><div class="conn-sub">${ct.sub}</div>
+      </div>`).join('')}</div>
+    ${bwHtml(typeKey,bwKey)}
+  </div>`;
+}
+
+function tierBadgeHtml(tier){
+  const cls={'tier1':'tier-1','tier2':'tier-2','tier3':'tier-3','rural':'tier-rural'}[tier]||'tier-2';
+  const lbl={'tier1':'Tier 1','tier2':'Tier 2','tier3':'Tier 3','rural':'Rural'}[tier]||'Tier 2';
+  return `<span class="tier-badge ${cls}">${lbl}</span>`;
+}
+
+function costBoxHtml(){
+  const est=totalCost(tempCfg);
+  const spend=Number(tempCfg.spend)||0;
+  const saved=spend-est;
+  const cd=CTRY[+activeId]||{n:'Unknown'};
+  if(!est)return '';
+  const breakdown=tempCfg.sites&&tempCfg.sites.filter(s=>s.address).length>1
+    ?`<div class="site-breakdown">${tempCfg.sites.map((s,i)=>{
+        if(!s.address)return '';
+        const sc=siteCost(s,tempCfg);
+        return `<div class="sb-row">
+          <span class="sb-addr" title="${s.address}">Site ${i+1}: ${s.address.split(',')[0]}</span>
+          <span class="sb-cost">$${sc.toLocaleString()}<span style="color:var(--muted)">/mo</span></span>
+        </div>`;
+      }).join('')}</div>`:''
+  ;
+  return `<div class="cost-box" id="cost-box">
+    <div class="cost-row">
+      <span class="cost-lbl">Est. Market Rate · ${cd.n}</span>
+      <span class="cost-val">$${est.toLocaleString()}<small style="font-size:8px;color:var(--muted)">/mo</small></span>
+    </div>
+    ${breakdown}
+    ${spend>0?`<div class="cost-div"></div>
+    <div class="cost-row">
+      <span class="cost-lbl">Your Current Spend</span>
+      <span class="cost-val amber">$${spend.toLocaleString()}<small style="font-size:8px;color:var(--muted)">/mo</small></span>
+    </div>
+    <div class="cost-row" style="margin-top:3px">
+      <span class="cost-lbl">${saved>=0?'Potential Savings':'Above Market'}</span>
+      <span class="cost-val ${saved>=0?'green':'red'}">$${Math.abs(saved).toLocaleString()}<small style="font-size:8px;color:var(--muted)">/mo</small></span>
+    </div>`:''}
+    <div class="cost-note">★ Rates for ${cd.n} · adjusted per site location tier · final quote after site survey</div>
+  </div>`;
+}
+
+function ctaHtml(){
+  const est=totalCost(tempCfg);
+  if(!est)return '';
+  return `<div class="savings-cta" id="cta-box">
+    <div class="sq">
+      <div class="sq-lbl">One quick question</div>
+      <div class="sq-text">Are we meeting your budgetary needs?</div>
+    </div>
+    <div class="cta-btns" id="cta-btns">
+      <button class="cta-btn cta-btn-y" onclick="ctaYes()">
+        <span class="cb-label" style="color:var(--green)">YES</span>
+        <span class="cb-sub">This works for us</span>
+      </button>
+      <button class="cta-btn cta-btn-n" onclick="ctaNo()">
+        <span class="cb-label" style="color:var(--amber)">NOT QUITE</span>
+        <span class="cb-sub">Need to refine</span>
+      </button>
+    </div>
+    <div class="cta-res" id="cta-res"></div>
+  </div>`;
+}
+
+function renderPanel(){
+  const doneOthers=Object.entries(state).filter(([k])=>k!==activeId);
+  const sitesHtml=tempCfg.sites.map((site,i)=>`
+    <div class="site-card${site.address?' has-place':''}" id="sc-${site.id}">
+      <div class="site-card-top">
+        <span class="site-num">${i+1}</span>
+        <div class="site-addr-wrap">
+          <input class="site-addr" id="addr-${site.id}" type="text" placeholder="Enter address or building name…" value="${site.address||''}" autocomplete="off">
+        </div>
+        <button class="site-clear" onclick="removeSite('${site.id}')" title="Remove site">✕</button>
+      </div>
+      ${site.address?`<div class="site-meta">
+        ${tierBadgeHtml(site.tier)}
+        <span style="font-size:9px;color:var(--muted);letter-spacing:0.5px">${TIER_LABELS[site.tier]||''}</span>
+        <span class="site-cost"><span class="sc-val">$${siteCost(site,tempCfg).toLocaleString()}</span>/mo</span>
+      </div>`:''}
+    </div>`).join('');
+
+  document.getElementById('p-scroll').innerHTML=`
+    <!-- UPLOAD STRIP -->
+    <div style="background:linear-gradient(135deg,var(--navy),#1a2f50);border-radius:8px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:800;color:#fff;letter-spacing:0.3px;margin-bottom:3px;">Have a site list already?</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.5);">Upload an Excel or CSV to import all sites at once</div>
+      </div>
+      <button onclick="document.getElementById('xl-file-input').click()" style="flex-shrink:0;display:flex;align-items:center;gap:7px;padding:9px 16px;background:var(--orange);border:none;border-radius:6px;cursor:pointer;color:#fff;font-family:var(--body);font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;transition:all 0.2s;box-shadow:0 2px 10px rgba(255,102,0,0.35);" onmouseover="this.style.background='#FF8533'" onmouseout="this.style.background='var(--orange)'">
+        <span style="font-size:14px;">📊</span> Upload Spreadsheet
+      </button>
+    </div>
+
+    <!-- SITES -->
+    <div class="fb">
+      <div class="flabel">Site Locations</div>
+      <div class="sites-list" id="sites-list">${sitesHtml}</div>
+      <button class="add-site-btn" onclick="addSite()">
+        <span class="add-icon">+</span> Add Site Manually
+      </button>
+    </div>
+
+    <!-- CIRCUITS -->
+    ${connHtml('Primary Circuit','primary','primaryBw',false)}
+    ${connHtml('Secondary / Backup Circuit','secondary','secondaryBw',false)}
+    ${tempCfg.hasTertiary
+      ? connHtml('Tertiary Circuit','tertiary','tertiaryBw',true)
+      : `<div class="tert-toggle" onclick="addTertiary()">
+          <span class="tert-icon">+</span>
+          <div><div class="tert-txt">Add Tertiary Circuit</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:2px">Optional 3rd link for maximum resilience</div></div>
+        </div>`}
+
+    <!-- SPEND + COSTS -->
+    <div class="fb" id="spend-fb">
+      <div class="flabel">Current Monthly Spend <span style="font-size:8px;color:var(--muted)">(optional)</span></div>
+      <div class="spend-wrap"><input id="spend-in" class="spend-in" type="number" placeholder="0 per month" value="${tempCfg.spend||''}" oninput="onSpend(this.value)"></div>
+      ${costBoxHtml()}
+    </div>
+    ${ctaHtml()}
+
+    <!-- OTHER COUNTRIES -->
+    ${doneOthers.length>0?`
+      <div class="oc-header">Other Configured Countries</div>
+      ${doneOthers.map(([k,c])=>{
+        const cd=CTRY[+k]||{n:'Unknown',f:'🌐'};
+        const ns=c.sites?c.sites.filter(s=>s.address).length:0;
+        return `<div class="oc-item">
+          <div class="oc-dot"></div>
+          <div class="oc-info">
+            <div class="oc-name">${cd.f} ${cd.n}</div>
+            <div class="oc-detail">${ns} site${ns!==1?'s':''} · ${c.primary}${c.primaryBw?' '+c.primaryBw:''} / ${c.secondary}${c.secondaryBw?' '+c.secondaryBw:''}${c.hasTertiary&&c.tertiary?' / '+c.tertiary+(c.tertiaryBw?' '+c.tertiaryBw:''):''}${c.spend?' · $'+Number(c.spend).toLocaleString()+'/mo':''}</div>
+          </div>
+          <button class="oc-edit" onclick="closePanel();setTimeout(()=>openPanel(${+k}),220)">Edit</button>
+        </div>`;
+      }).join('')}`:''}
+  `;
+
+  // Attach autocomplete to all site inputs
+  tempCfg.sites.forEach(site=>{
+    const el=document.getElementById('addr-'+site.id);
+    if(el) attachAutocomplete(el, site.id);
+  });
+
+  // Show API banner if key not set
+  if(!mapsLoaded){
+    document.getElementById('apikey-banner').style.display='block';
+  }
+}
+
+/* ══════════════════════════════════════════════════════
+   PANEL INTERACTIONS
+══════════════════════════════════════════════════════ */
+function addSite(){
+  const s=newSite();
+  tempCfg.sites.push(s);
+  // Append to sites-list DOM and attach autocomplete
+  const list=document.getElementById('sites-list');
+  const i=tempCfg.sites.length-1;
+  const div=document.createElement('div');
+  div.className='site-card';
+  div.id='sc-'+s.id;
+  div.innerHTML=`<div class="site-card-top">
+    <span class="site-num">${i+1}</span>
+    <div class="site-addr-wrap"><input class="site-addr" id="addr-${s.id}" type="text" placeholder="Enter address or building name…" autocomplete="off"></div>
+    <button class="site-clear" onclick="removeSite('${s.id}')" title="Remove">✕</button>
+  </div>`;
+  list.appendChild(div);
+  attachAutocomplete(document.getElementById('addr-'+s.id), s.id);
+  document.getElementById('addr-'+s.id).focus();
+}
+
+function removeSite(id){
+  if(tempCfg.sites.length<=1){
+    // Clear it instead of removing
+    const site=tempCfg.sites[0];
+    site.address=''; site.lat=null; site.lng=null; site.tier='tier2'; site.name='';
+    const el=document.getElementById('addr-'+site.id);
+    if(el)el.value='';
+    document.getElementById('sc-'+site.id).className='site-card';
+    const meta=document.querySelector('#sc-'+site.id+' .site-meta');
+    if(meta)meta.remove();
+    return;
+  }
+  tempCfg.sites=tempCfg.sites.filter(s=>s.id!==id);
+  const el=document.getElementById('sc-'+id);
+  if(el)el.remove();
+  // Renumber
+  const cards=document.querySelectorAll('#sites-list .site-card');
+  cards.forEach((c,i)=>{const n=c.querySelector('.site-num');if(n)n.textContent=i+1;});
+  patchCostArea();
+}
+
+function updateSitePlaceData(siteId, data){
+  const site=tempCfg.sites.find(s=>s.id===siteId);
+  if(!site)return;
+  Object.assign(site, data);
+  // Update card visually
+  const card=document.getElementById('sc-'+siteId);
+  if(card){
+    card.className='site-card has-place';
+    let meta=card.querySelector('.site-meta');
+    if(!meta){meta=document.createElement('div');meta.className='site-meta';card.appendChild(meta);}
+    meta.innerHTML=`${tierBadgeHtml(site.tier)}
+      <span style="font-size:9px;color:var(--muted);letter-spacing:0.5px">${TIER_LABELS[site.tier]||''}</span>
+      <span class="site-cost"><span class="sc-val">$${siteCost(site,tempCfg).toLocaleString()}</span>/mo</span>`;
+  }
+  patchCostArea();
+}
+
+function pickConn(typeKey,bwKey,id,el){
+  tempCfg[typeKey]=id;
+  const bws=BW[id]||[];
+  tempCfg[bwKey]=bws[2]||bws[0]||'';
+  el.closest('.conn-grid').querySelectorAll('.conn-card').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('bwwrap-'+typeKey).outerHTML=bwHtml(typeKey,bwKey);
+  // Refresh per-site costs in cards
+  tempCfg.sites.forEach(s=>{
+    const meta=document.querySelector('#sc-'+s.id+' .site-meta');
+    if(meta&&s.address){
+      const cv=meta.querySelector('.sc-val');
+      if(cv)cv.textContent='$'+siteCost(s,tempCfg).toLocaleString();
+    }
+  });
+  patchCostArea();
+}
+function pickBw(field,val,el){
+  tempCfg[field]=val;
+  el.closest('.bw-chips').querySelectorAll('.bwc').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  // Refresh per-site costs in cards
+  tempCfg.sites.forEach(s=>{
+    const meta=document.querySelector('#sc-'+s.id+' .site-meta');
+    if(meta&&s.address){
+      const cv=meta.querySelector('.sc-val');
+      if(cv)cv.textContent='$'+siteCost(s,tempCfg).toLocaleString();
+    }
+  });
+  patchCostArea();
+}
+function addTertiary(){tempCfg.hasTertiary=true;tempCfg.tertiary='Satellite';tempCfg.tertiaryBw='25 Mbps';renderPanel();}
+function removeTertiary(){tempCfg.hasTertiary=false;renderPanel();}
+function onSpend(v){tempCfg.spend=v?+v:'';patchCostArea();}
+
+function patchCostArea(){
+  const fb=document.getElementById('spend-fb');
+  if(!fb)return;
+  const old=document.getElementById('cost-box');
+  if(old)old.remove();
+  const oldCta=document.getElementById('cta-box');
+  if(oldCta)oldCta.remove();
+  const tmp=document.createElement('div');
+  tmp.innerHTML=costBoxHtml();
+  while(tmp.firstChild)fb.appendChild(tmp.firstChild);
+  const ctaTmp=document.createElement('div');
+  ctaTmp.innerHTML=ctaHtml();
+  while(ctaTmp.firstChild)fb.after(ctaTmp.firstChild);
+}
+
+function ctaYes(){
+  document.getElementById('cta-btns').style.display='none';
+  const r=document.getElementById('cta-res');
+  r.className='cta-res show';
+  r.style.cssText='display:block;padding:20px 18px;background:linear-gradient(135deg,rgba(0,179,122,0.06),rgba(0,179,122,0.02));border-top:3px solid var(--green)';
+  r.innerHTML=`<div style="font-size:26px;margin-bottom:10px">🤝</div>
+    <div style="font-size:10px;font-weight:800;letter-spacing:2px;color:var(--green);margin-bottom:8px;text-transform:uppercase">Let's make it happen</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">Great to hear — let's hop on a call to lock in the details and get your global network moving.</div>
+    <button class="btn btn-yes" style="width:100%;padding:12px;font-size:12px" onclick="saveConfig()">Book a Call →</button>`;
+}
+function ctaNo(){
+  document.getElementById('cta-btns').style.display='none';
+  const r=document.getElementById('cta-res');
+  r.className='cta-res show';
+  r.style.cssText='display:block;padding:20px 18px;background:linear-gradient(135deg,rgba(255,102,0,0.06),rgba(255,102,0,0.02));border-top:3px solid var(--orange)';
+  r.innerHTML=`<div style="font-size:26px;margin-bottom:10px">🔧</div>
+    <div style="font-size:10px;font-weight:800;letter-spacing:2px;color:var(--orange);margin-bottom:8px;text-transform:uppercase">Let's refine it together</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">No problem — let's hop on a call to go through the numbers in more detail and find an approach that works for your budget.</div>
+    <button class="btn btn-no" style="width:100%;padding:12px;font-size:12px" onclick="saveConfig()">Book a Refinement Call →</button>`;
+}
+
+function saveConfig(){
+  if(!activeId)return;
+  state[activeId]=JSON.parse(JSON.stringify(tempCfg));
+  closePanel();
+  refreshAll();
+}
+
+/* ══════════════════════════════════════════════════════
+   VISUAL REFRESH
+══════════════════════════════════════════════════════ */
+function refreshAll(){
+  refreshMap();
+  refreshArcs();
+  refreshDots();
+  refreshBar();
+  document.getElementById('instruction').classList.toggle('hide',Object.keys(state).length>0);
+}
+
+function refreshArcs(){
+  arcsG.selectAll('*').remove();
+  const ids=Object.keys(state);
+  if(ids.length<2)return;
+  const cents={};
+  ids.forEach(id=>{
+    const f=cfeats.find(ft=>String(ft.id)===id);
+    if(f){const c=gp.centroid(f);if(c&&!isNaN(c[0]))cents[id]=c;}
+  });
+  const ks=Object.keys(cents);
+  for(let i=0;i<ks.length;i++)for(let j=i+1;j<ks.length;j++){
+    const p1=cents[ks[i]],p2=cents[ks[j]];
+    const mx=(p1[0]+p2[0])/2,my=(p1[1]+p2[1])/2-Math.abs(p2[0]-p1[0])*0.15-16;
+    arcsG.append('path').attr('class','arc')
+      .attr('d',`M${p1[0]},${p1[1]} Q${mx},${my} ${p2[0]},${p2[1]}`)
+      .attr('stroke','#FF6600').attr('stroke-width',0.7).attr('opacity',0.22)
+      .attr('stroke-dashoffset',Math.random()*-80);
+  }
+}
+
+function refreshDots(){
+  dotsG.selectAll('*').remove();
+  Object.entries(state).forEach(([id,cfg])=>{
+    // If we have real site coordinates, use those
+    const sitesWithCoords=(cfg.sites||[]).filter(s=>s.lat&&s.lng);
+    if(sitesWithCoords.length>0){
+      sitesWithCoords.forEach(site=>{
+        const [px,py]=proj([site.lng,site.lat]);
+        if(!px||isNaN(px))return;
+        [0,1].forEach(i=>{
+          dotsG.append('circle').attr('class','dring')
+            .attr('cx',px).attr('cy',py).attr('r',3)
+            .attr('stroke','#FF6600').attr('opacity',0)
+            .style('animation-delay',`${i*0.9}s`);
+        });
+        dotsG.append('circle').attr('cx',px).attr('cy',py).attr('r',3.5)
+          .attr('fill','#FF6600').attr('stroke','#fff').attr('stroke-width',1)
+          .style('filter','drop-shadow(0 0 4px #FF6600)');
+      });
+      // Country label dot
+      const f=cfeats.find(ft=>String(ft.id)===id);
+      if(f){
+        const c=gp.centroid(f);
+        if(c&&!isNaN(c[0])){
+          dotsG.append('text').attr('x',c[0]+7).attr('y',c[1]-5)
+            .attr('fill','#FF6600').attr('font-size','9px')
+            .attr('font-family','Orbitron,monospace').attr('font-weight','700')
+            .text(`×${sitesWithCoords.length}`);
+        }
+      }
+    } else {
+      // Fallback: country centroid dot
+      const f=cfeats.find(ft=>String(ft.id)===id);
+      if(!f)return;
+      const c=gp.centroid(f);
+      if(!c||isNaN(c[0]))return;
+      const [px,py]=c;
+      [0,1,2].forEach(i=>{
+        dotsG.append('circle').attr('class','dring')
+          .attr('cx',px).attr('cy',py).attr('r',4)
+          .attr('stroke','#FF6600').attr('opacity',0)
+          .style('animation-delay',`${i*0.85}s`);
+      });
+      dotsG.append('circle').attr('cx',px).attr('cy',py).attr('r',4.5)
+        .attr('fill','#FF6600').attr('stroke','#fff').attr('stroke-width',1.2)
+        .style('filter','drop-shadow(0 0 4px #FF6600) drop-shadow(0 0 8px #FF660055)');
+      const ns=(cfg.sites||[]).length;
+      dotsG.append('text').attr('x',px+7).attr('y',py-5)
+        .attr('fill','#FF6600').attr('font-size','9px')
+        .attr('font-family','Orbitron,monospace').attr('font-weight','700')
+        .text(`×${ns}`);
+    }
+  });
+}
+
+function refreshBar(){
+  const ks=Object.keys(state);
+  const totalSites=ks.reduce((s,k)=>{const c=state[k];return s+(c.sites?c.sites.length:1);},0);
+  const totalSpend=ks.reduce((s,k)=>s+(Number(state[k].spend)||0),0);
+  const totalMkt=ks.reduce((s,k)=>s+totalCost(state[k]),0);
+  const saved=totalSpend?totalSpend-totalMkt:0;
+  document.getElementById('m-cnt').textContent=ks.length;
+  document.getElementById('m-sites').textContent=totalSites;
+  document.getElementById('m-market').textContent=totalMkt?'$'+totalMkt.toLocaleString()+'/mo':'—';
+  document.getElementById('m-spend').textContent=totalSpend?'$'+totalSpend.toLocaleString()+'/mo':'—';
+  document.getElementById('m-save').textContent=totalSpend?'$'+Math.abs(saved).toLocaleString()+'/mo':'—';
+}
+
+/* ══════════════════════════════════════════════════════
+   API KEY MODAL
+══════════════════════════════════════════════════════ */
+function openApiKeyModal(){document.getElementById('apikey-overlay').classList.add('open');}
+function closeApiKeyModal(){document.getElementById('apikey-overlay').classList.remove('open');}
+function applyApiKey(){
+  const key=document.getElementById('apikey-input').value.trim();
+  if(!key)return;
+  closeApiKeyModal();
+  loadMapsScript(key);
+}
+
+/* ══════════════════════════════════════════════════════
+   SHARE / URL
+══════════════════════════════════════════════════════ */
+function loadFromUrl(){
+  const m=location.hash.match(/cfg=([^&]*)/);
+  if(!m)return;
+  try{state=JSON.parse(decodeURIComponent(atob(m[1])));refreshAll();}catch(e){}
+}
+/* ══════════════════════════════════════════════════════
+   EXCEL / CSV IMPORT
+══════════════════════════════════════════════════════ */
+let importRows = [];   // raw parsed rows (array of objects)
+let importHeaders = [];
+
+function handleFileSelect(input){
+  const file = input.files[0];
+  if(!file) return;
+  input.value = ''; // reset so same file can be re-selected
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, {defval:''});
+      if(!json.length){ alert('The spreadsheet appears to be empty.'); return; }
+      importRows = json;
+      importHeaders = Object.keys(json[0]);
+      openImportModal(file.name);
+    } catch(err){
+      alert('Could not read that file. Please use .xlsx, .xls or .csv format.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function openImportModal(filename){
+  document.getElementById('im-filename').textContent = filename;
+  document.getElementById('im-stat-rows').textContent = importRows.length;
+  document.getElementById('im-stat-cols').textContent = importHeaders.length;
+  document.getElementById('im-stat-valid').textContent = '—';
+
+  // Populate column selectors
+  const addrSel = document.getElementById('im-col-address');
+  const nameSel = document.getElementById('im-col-name');
+  const makeOptions = (withBlank, blankLabel) =>
+    `<option value="">${blankLabel}</option>` +
+    importHeaders.map(h=>`<option value="${h}">${h}</option>`).join('');
+  addrSel.innerHTML = makeOptions(true,'— select column —');
+  nameSel.innerHTML = makeOptions(true,'— optional —');
+
+  // Auto-detect likely address column
+  const addrGuess = importHeaders.find(h=>
+    /addr|address|location|site|postcode|postal|zip|street|building/i.test(h));
+  if(addrGuess){ addrSel.value = addrGuess; }
+
+  // Auto-detect likely name column
+  const nameGuess = importHeaders.find(h=>
+    /name|label|site.?name|description|title|office|branch/i.test(h));
+  if(nameGuess){ nameSel.value = nameGuess; }
+
+  refreshPreview();
+  document.getElementById('import-overlay').classList.add('open');
+}
+
+let importCancelled = false;
+
+function closeImport(){
+  importCancelled = true;
+  document.getElementById('import-overlay').classList.remove('open');
+  document.getElementById('im-progress').style.display = 'none';
+  document.getElementById('im-prog-bar').style.width = '0%';
+}
+
+async function confirmImport(skipGeocode){
+  const addrCol = document.getElementById('im-col-address').value;
+  const nameCol = document.getElementById('im-col-name').value;
+  if(!addrCol) return;
+
+  const validRows = importRows.filter(r => String(r[addrCol]||'').trim().length > 3);
+  if(!validRows.length) return;
+
+  importCancelled = false;
+  const doGeocode = !skipGeocode && mapsLoaded && window.google;
+
+  const progress = document.getElementById('im-progress');
+  const bar = document.getElementById('im-prog-bar');
+  const label = document.getElementById('im-prog-label');
+  const importBtn = document.getElementById('im-import-btn');
+  const skipBtn  = document.getElementById('im-skip-btn');
+  const cancelBtn = document.getElementById('im-cancel-btn');
+
+  importBtn.disabled = true;
+  if(skipBtn) skipBtn.style.display = 'none';
+  if(cancelBtn){ cancelBtn.style.display = 'inline-flex'; cancelBtn.disabled = false; }
+  progress.style.display = 'block';
+
+  // Warn upfront if large list
+  if(doGeocode && validRows.length > 50){
+    label.textContent = `Large list detected (${validRows.length} sites) — geocoding at safe rate…`;
+    await sleep(400);
+  }
+
+  const DELAY_MS = 250; // 4 req/sec — safely under Google's 50 req/sec limit
+  const TIMEOUT_MS = 6000;
+  const newSites = [];
+
+  for(let i = 0; i < validRows.length; i++){
+    if(importCancelled) break;
+
+    const row = validRows[i];
+    const addr = String(row[addrCol]||'').trim();
+    const name = nameCol ? String(row[nameCol]||'').trim() : '';
+    const pct  = Math.round(((i+1)/validRows.length)*100);
+
+    bar.style.width = pct+'%';
+    label.textContent = doGeocode
+      ? `Geocoding ${i+1} of ${validRows.length}: ${addr.substring(0,36)}…`
+      : `Importing ${i+1} of ${validRows.length}…`;
+
+    let site = {
+      id: Date.now() + i + Math.floor(Math.random()*1000),
+      address: addr, name,
+      lat: null, lng: null, tier: 'tier2', isoId: null
+    };
+
+    if(doGeocode){
+      try{
+        const result = await Promise.race([
+          geocodeAddress(addr),
+          sleep(TIMEOUT_MS).then(()=>null)
+        ]);
+        if(result){
+          site.lat  = result.lat;
+          site.lng  = result.lng;
+          site.tier = classifyTier(result.place);
+          site.address = result.formattedAddress || addr;
+          site.isoId   = resolveIsoFromPlace(result.place);
+        }
+      } catch(e){ /* keep defaults */ }
+      if(i < validRows.length - 1) await sleep(DELAY_MS);
+    } else {
+      // No geocode — try to guess country from address string
+      site.isoId = guessCountryFromAddress(addr);
+    }
+
+    newSites.push(site);
+  }
+
+  if(importCancelled){
+    if(importBtn) importBtn.disabled = false;
+    if(skipBtn)   skipBtn.style.display = 'inline-flex';
+    if(cancelBtn) cancelBtn.style.display = 'none';
+    progress.style.display = 'none';
+    bar.style.width = '0%';
+    return;
+  }
+
+  if(cancelBtn) cancelBtn.style.display = 'none';
+  label.textContent = `✓ ${newSites.length} sites processed!`;
+  await sleep(500);
+
+  // ── Shared grouping logic ──
+  const byCountry = {};
+  const unmatched = [];
+
+  newSites.forEach(site => {
+    const id = site.isoId;
+    if(id && CTRY[id]){
+      if(!byCountry[id]) byCountry[id] = [];
+      byCountry[id].push(site);
+    } else {
+      unmatched.push(site);
+    }
+  });
+
+  closeImport();
+
+  // Case A — panel open, assign directly to active country
+  if(activeId){
+    const allSites = [...byCountry, ...unmatched].flat ? newSites : newSites;
+    tempCfg.sites = [...(tempCfg.sites.filter(s=>s.address)), ...newSites];
+    renderPanel();
+    patchCostArea();
+    return;
+  }
+
+  // Case B — from map, auto-group by country
+  Object.entries(byCountry).forEach(([isoId, sites]) => {
+    const key = String(isoId);
+    if(state[key]){
+      state[key].sites = [...(state[key].sites||[]).filter(s=>s.address), ...sites];
+    } else {
+      state[key] = { ...defaultCfg(+isoId), sites };
+    }
+  });
+
+  refreshAll();
+
+  const matched = Object.keys(byCountry).length;
+  if(matched === 0){
+    alert(`Imported ${newSites.length} sites but couldn't match them to countries automatically.\n\nClick a country on the map and upload again from inside the panel to assign them directly.`);
+  } else {
+    if(unmatched.length > 0){
+      console.log(`${unmatched.length} site(s) skipped — no country match.`);
+    }
+    openPanel(+Object.keys(byCountry)[0]);
+  }
+}
+
+// Rough country guess from address text (used when skipping geocode)
+function guessCountryFromAddress(addr){
+  const codeMatch = addr.match(/,\s*([A-Z]{2})\s*$/);
+  if(codeMatch && ALPHA2_TO_ISO[codeMatch[1]]) return ALPHA2_TO_ISO[codeMatch[1]];
+  const a = addr.toLowerCase();
+  for(const [id, cd] of Object.entries(CTRY)){
+    if(a.includes(cd.n.toLowerCase())) return +id;
+  }
+  return null;
+}
+
+function refreshPreview(){
+  const addrCol = document.getElementById('im-col-address').value;
+  const nameCol = document.getElementById('im-col-name').value;
+  const tbody = document.getElementById('im-preview-body');
+  const footInfo = document.getElementById('im-foot-info');
+  const importBtn = document.getElementById('im-import-btn');
+  const countEl = document.getElementById('im-preview-count');
+
+  if(!addrCol){
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:14px">Select an address column to preview</td></tr>`;
+    footInfo.innerHTML = 'Select an address column to continue';
+    importBtn.disabled = true;
+    document.getElementById('im-stat-valid').textContent = '—';
+    return;
+  }
+
+  const validRows = importRows.filter(r => String(r[addrCol]||'').trim().length > 3);
+  document.getElementById('im-stat-valid').textContent = validRows.length;
+  countEl.textContent = `(showing ${Math.min(8, validRows.length)} of ${validRows.length})`;
+
+  const previewRows = validRows.slice(0,8);
+  tbody.innerHTML = previewRows.map((r,i)=>`
+    <tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="color:var(--text)">${String(r[addrCol]||'').substring(0,50)}</td>
+      <td style="color:var(--text2)">${nameCol?String(r[nameCol]||'').substring(0,30):'—'}</td>
+    </tr>`).join('');
+
+  footInfo.innerHTML = `<strong style="color:var(--text)">${validRows.length}</strong> sites ready to import`;
+  importBtn.disabled = validRows.length === 0;
+  const skipBtn = document.getElementById('im-skip-btn');
+  if(skipBtn) skipBtn.disabled = validRows.length === 0;
+}
+
+// Resolve ISO numeric country id from a Google geocode result
+function resolveIsoFromPlace(place){
+  if(!place || !place.address_components) return null;
+  for(const comp of place.address_components){
+    if(comp.types.includes('country')){
+      const cc = comp.short_name; // 2-letter ISO alpha-2
+      return ALPHA2_TO_ISO[cc] || null;
+    }
+  }
+  return null;
+}
+
+// ISO alpha-2 → numeric map (subset covering our CTRY registry)
+const ALPHA2_TO_ISO = {
+  AF:4,AL:8,DZ:12,AO:24,AR:32,AU:36,AT:40,BH:48,BD:50,BE:56,BT:64,BO:68,
+  BA:70,BW:72,BR:76,BZ:84,BN:96,BG:100,MM:104,BY:112,KH:116,CM:120,CA:124,
+  CV:132,CF:140,LK:144,TD:148,CL:152,CN:156,CO:170,CG:178,CD:180,CR:188,
+  HR:191,CU:192,CZ:203,BJ:204,DK:208,DO:214,EC:218,SV:222,ET:231,EE:233,
+  FJ:242,FI:246,FR:250,GA:266,GE:268,DE:276,GH:288,GR:300,GT:320,GY:328,
+  HT:332,HN:340,HU:348,IN:356,ID:360,IR:364,IQ:368,IE:372,IL:376,IT:380,
+  JM:388,JP:392,KZ:398,JO:400,KE:404,KR:410,KW:414,LA:418,LB:422,LS:426,
+  LV:428,LR:430,LT:440,MG:450,MW:454,MY:458,ML:466,MR:478,MX:484,MN:496,
+  MD:498,ME:499,MA:504,MZ:508,OM:512,NA:516,NP:524,NL:528,VU:548,NZ:554,
+  NI:558,NE:562,NG:566,NO:578,PK:586,PA:591,PG:598,PY:600,PE:604,PH:608,
+  PL:616,PT:620,PR:630,QA:634,RO:642,RU:643,RW:646,SA:682,SN:686,RS:688,
+  SL:694,SG:702,SK:703,SI:705,SO:706,ZA:710,ZW:716,ES:724,SR:740,SE:752,
+  CH:756,SY:760,TH:764,TG:768,TO:776,TR:792,UG:800,UA:804,MK:807,EG:818,
+  GB:826,TZ:834,US:840,BF:854,UY:858,VE:862,YE:887,ZM:894,AZ:31,AM:51,PS:275,
+  TT:780,LY:434,TM:795,TJ:762,UZ:860,KG:417,TW:158,HK:344,MO:446,KP:408,
+  CY:196,MT:470,IS:352,LU:442,LI:438,MC:492,SM:674,VA:336,AD:20,MV:462,
+  SC:690,MU:480,RE:638,YT:175,PM:666,GL:304,FO:234,AX:248,JE:832,GG:831,
+  IM:833,GI:292,SH:654,TC:796,KY:136,MS:500,VG:92,AI:660,AW:533,CW:531,
+  SX:534,BQ:535,MF:663,GP:312,MQ:474,GF:254,BL:652,XK:383,
+};
+
+
+function geocodeAddress(address){
+  return new Promise((resolve, reject)=>{
+    if(!window.google) return reject('no maps');
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({address}, (results, status)=>{
+      if(status==='OK' && results[0]){
+        const r = results[0];
+        resolve({
+          lat: r.geometry.location.lat(),
+          lng: r.geometry.location.lng(),
+          formattedAddress: r.formatted_address,
+          place: r
+        });
+      } else { resolve(null); }
+    });
+  });
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function resetAll(){state={};refreshAll();}
+
+// Auto-load Maps with embedded key
+window.addEventListener('load',()=>{
+  document.getElementById('apikey-banner').style.display='none';
+  loadMapsScript(mapsApiKey);
+});
+</script>
+</body>
+</html>
